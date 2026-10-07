@@ -1,0 +1,106 @@
+/*
+ * Load the forecast from data/forecast.json, unless window.FORECAST is provided first.
+ * Expected data (3 to 14 days):
+ * {
+ *   location, model, program, generated (ISO 8601 with timezone),
+ *   days: [{
+ *     date: 'YYYY-MM-DD', tmax, tmin, precip,
+ *     periods: [{ temp, wind, gust, dir, pRain, pStorm, pSevere, pSnow, cloud }]
+ *   }]
+ * }
+ * tmin is optional and is only shown when all four periods are available.
+ * The first day may contain fewer periods; missing periods are assumed to be at the start.
+ * Units: degrees Celsius, km/h, wind direction in degrees, mm, and percentages.
+ */
+let F;
+const $=id=>document.getElementById(id);
+const DIR=['N','NNE','NE','ENE','E','ESE','SE','SSE','S','SSO','SO','OSO','O','ONO','NO','NNO'];
+const PER=[['Madrugada','00 a 06 h'],['Mañana','06 a 12 h'],['Tarde','12 a 18 h'],['Noche','18 a 24 h']];
+const dt=d=>new Date(d+'T12:00:00'),cap=s=>s[0].toUpperCase()+s.slice(1),mx=(d,k)=>Math.max(...d.periods.map(p=>p[k]));
+let N=7,sel=0;
+const hm=d=>d.tmin!=null&&d.periods.length===4; /* A minimum temperature is meaningful only for a complete day. */
+
+/* Return the dominant weather icon and matching hero theme for a day. */
+function icon(d){
+  const c=d.periods.reduce((a,p)=>a+p.cloud,0)/d.periods.length;
+  if(mx(d,'pStorm')>=35)return['⛈️','storm'];
+  if(mx(d,'pSnow')>=50)return['🌨️','rain'];
+  if(mx(d,'pRain')>=50)return['🌧️','rain'];
+  if(c>=70)return['☁️','cloud'];
+  return c>=35?['⛅','sun']:['☀️','sun'];
+}
+
+/* Build the forecast-length controls. */
+function seg(){
+  $('seg').innerHTML=[3,7,10,14].filter(n=>n<=F.days.length).map(n=>`<button data-n="${n}" aria-pressed="${n==N}">${n} días</button>`).join('');
+}
+
+/* Update the selected day's headline conditions. */
+function head(){
+  const d=F.days[sel],[ic,sky]=icon(d);$('hero').dataset.sky=sky;
+  $('loc').textContent=F.location;const g=new Date(F.generated),gs=isNaN(g)?'':g.toLocaleDateString('es-AR',{day:'numeric',month:'short'}).replace('.','')+', '+g.toLocaleTimeString('es-AR',{hour:'2-digit',minute:'2-digit',hour12:false})+' h';
+  $('meta').textContent=`${F.model}${gs?', generado el '+gs:''}${F.program?' por '+F.program:''}`;
+  const lab=cap(dt(d.date).toLocaleDateString('es-AR',{weekday:'long',day:'numeric',month:'long'}));
+  $('now').innerHTML=`<div class="big"><span class="ico" aria-hidden="true">${ic}</span><div><div class="dayl">${lab}</div>
+  <div class="temps">${d.tmax}°${hm(d)?`<span>${d.tmin}°</span>`:''}</div></div></div>
+  <ul class="chips"><li>${d.precip.toFixed(1)} mm<small>Precipitación</small></li><li>${mx(d,'pRain')} %<small>Lluvia máxima</small></li>
+  <li>${mx(d,'wind')} km/h<small>Viento máximo</small></li><li>${mx(d,'gust')} km/h<small>Ráfaga máxima</small></li></ul>`;
+  $('dtitle').textContent=lab;
+}
+
+/* Draw the interactive temperature and precipitation chart. */
+function chart(){
+  const D=F.days.slice(0,N),cw=64,W=N*cw,H=260,top=62,bot=108,base=212;
+  const hi=Math.max(...D.map(d=>d.tmax))+2,lo=Math.min(...D.map(d=>hm(d)?d.tmin:d.tmax))-2,mp=Math.max(10,...D.map(d=>d.precip));
+  const y=t=>top+(hi-t)/(hi-lo)*(H-top-bot),x=i=>i*cw+cw/2;
+  const pts=k=>D.map((d,i)=>(k=='tmin'&&!hm(d))?'':x(i)+','+y(d[k])).filter(Boolean).join(' ');
+  let s=`<polyline points="${pts('tmax')}" fill="none" stroke="#fff" stroke-width="2.5" stroke-linejoin="round"/>
+  <polyline points="${pts('tmin')}" fill="none" stroke="#fff" stroke-opacity=".55" stroke-width="2" stroke-dasharray="1 5" stroke-linecap="round"/>`;
+  D.forEach((d,i)=>{
+    const wd=i==0?'Hoy':cap(dt(d.date).toLocaleDateString('es-AR',{weekday:'short'}).replace('.',''))+' '+dt(d.date).getDate(),h=d.precip/mp*34;
+    s+=`<g class="col${i==sel?' on':''}" data-i="${i}" tabindex="0" role="button" aria-label="${wd}"><rect x="${i*cw+2}" y="2" width="${cw-4}" height="${H-4}" rx="16"/>
+    <text x="${x(i)}" y="36" font-size="22">${icon(d)[0]}</text>
+    <circle cx="${x(i)}" cy="${y(d.tmax)}" r="4" fill="#fff"/>${hm(d)?`<circle cx="${x(i)}" cy="${y(d.tmin)}" r="3" fill="#fff" fill-opacity=".7"/>`:''}
+    <text class="tx" x="${x(i)}" y="${y(d.tmax)-11}">${d.tmax}°</text>${hm(d)?`<text class="tn" x="${x(i)}" y="${y(d.tmin)+19}">${d.tmin}°</text>`:''}
+    <rect x="${x(i)-9}" y="${base-h}" width="18" height="${Math.max(h,d.precip>0?2:0)}" rx="4" style="fill:rgba(255,255,255,.75)"/>
+    <text class="pn" x="${x(i)}" y="${base+16}">${d.precip>0?d.precip.toFixed(d.precip<10?1:0)+' mm':'0'}</text><text class="dn" x="${x(i)}" y="${H-12}">${wd}</text></g>`;
+  });
+  const c=$('chart');c.setAttribute('viewBox',`0 0 ${W} ${H}`);c.style.minWidth=W+'px';c.innerHTML=s;
+}
+
+/* Render a probability row and bar when the probability is nonzero. */
+function prob(l,v,c){if(!v)return '';return `<div class="row"><span>${l}</span><b>${v} %</b></div><div class="bar" style="--c:${c}"><i style="width:${v}%"></i></div>`}
+
+/* Render the selected day's morning, afternoon, evening, and night details. */
+function detail(){
+  const P=F.days[sel].periods;$('detail').style.setProperty('--n',P.length);
+  $('detail').innerHTML=P.map((p,j,a,k=j+4-a.length)=>`<article class="per"><h3>${PER[k][0]}</h3><small>${PER[k][1]}</small>
+  <div class="pt">${p.temp}°</div>
+  <div class="row"><span>Nubosidad</span><b>${p.cloud} %</b></div><div class="bar" style="--c:#8a97ad"><i style="width:${p.cloud}%"></i></div>
+  <div class="wind"><div class="arr" style="transform:rotate(${(p.dir+180)%360}deg)" aria-hidden="true">↑</div>
+  <div><b>${p.wind} km/h</b> del ${DIR[Math.round(p.dir/22.5)%16]}<br><span>Ráfagas de ${p.gust} km/h</span></div></div>
+  ${prob('Lluvia',p.pRain,'var(--rain)')+prob('Tormenta',p.pStorm,'var(--storm)')+prob('Tormenta fuerte',p.pSevere,'var(--sev)')+prob('Nieve',p.pSnow,'var(--snow)')||'<div class="row"><span>Sin precipitación prevista</span></div>'}</article>`).join('');
+}
+
+/* Refresh every forecast section after a selection or range change. */
+function render(){seg();head();chart();detail()}
+$('seg').onclick=e=>{const b=e.target.closest('button');if(!b)return;N=+b.dataset.n;if(sel>=N)sel=0;render()};
+const pick=e=>{const g=e.target.closest('.col');if(g&&(e.type=='click'||e.key=='Enter'||e.key==' ')){e.preventDefault();sel=+g.dataset.i;render()}};
+$('chart').addEventListener('click',pick);$('chart').addEventListener('keydown',pick);
+
+/* Load and validate the forecast before rendering the page. */
+async function init(){
+  try{
+    if(window.FORECAST)F=window.FORECAST;
+    else{const r=await fetch('data/forecast.json',{cache:'no-store'});if(!r.ok)throw new Error(r.status);F=await r.json()}
+    if(!F.days||F.days.length<1)throw new Error('sin días');
+    F.days.forEach((d,i)=>{const L=d.periods?d.periods.length:0;
+      if(L<1||L>4||(i>0&&L!==4))throw new Error(`El día ${i+1} (${d.date}) tiene ${L} periodos; se esperaban ${i>0?'4':'de 1 a 4'}`)});
+    N=Math.min(7,F.days.length);render();
+  }catch(e){
+    console.error('Error al cargar data/forecast.json:',e);
+    $('loc').textContent='Pronóstico no disponible';
+    $('meta').textContent='No se pudo cargar data/forecast.json. Probá de nuevo en unos minutos.';
+  }
+}
+init();
