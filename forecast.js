@@ -10,6 +10,7 @@
  * }
  * tmin is optional and is only shown when all four periods are available.
  * The first day may contain fewer periods; missing periods are assumed to be at the start.
+ * An incomplete final day is ignored.
  * Units: degrees Celsius, km/h, wind direction in degrees, mm, and percentages.
  */
 let F;
@@ -94,6 +95,8 @@ async function init(){
     if(window.FORECAST)F=window.FORECAST;
     else{const r=await fetch('data/forecast.json',{cache:'no-store'});if(!r.ok)throw new Error(r.status);F=await r.json()}
     if(!F.days||F.days.length<1)throw new Error('sin días');
+    const last=F.days[F.days.length-1];
+    if(F.days.length>1&&last.periods?.length<4)F={...F,days:F.days.slice(0,-1)};
     F.days.forEach((d,i)=>{const L=d.periods?d.periods.length:0;
       if(L<1||L>4||(i>0&&L!==4))throw new Error(`El día ${i+1} (${d.date}) tiene ${L} periodos; se esperaban ${i>0?'4':'de 1 a 4'}`)});
     N=Math.min(7,F.days.length);render();
