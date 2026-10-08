@@ -44,7 +44,7 @@ function head(){
   const lab=cap(dt(d.date).toLocaleDateString('es-AR',{weekday:'long',day:'numeric',month:'long'}));
   $('now').innerHTML=`<div class="big"><span class="ico" aria-hidden="true">${ic}</span><div><div class="dayl">${lab}</div>
   <div class="temps">${d.tmax}°${hm(d)?`<span>${d.tmin}°</span>`:''}</div></div></div>
-  <ul class="chips"><li>${d.precip.toFixed(1)} mm<small>Precipitación</small></li><li>${mx(d,'pRain')} %<small>Lluvia máxima</small></li>
+  <ul class="chips"><li>${d.precip.toFixed(1)} mm<small>Precipitación</small></li><li>${mx(d,'pRain')} %<small>Prob. de lluvia</small></li>
   <li>${mx(d,'wind')} km/h<small>Viento máximo</small></li><li>${mx(d,'gust')} km/h<small>Ráfaga máxima</small></li></ul>`;
   $('dtitle').textContent=lab;
 }
