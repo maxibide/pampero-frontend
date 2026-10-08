@@ -93,7 +93,7 @@ $('chart').addEventListener('click',pick);$('chart').addEventListener('keydown',
 async function init(){
   try{
     if(window.FORECAST)F=window.FORECAST;
-    else{const r=await fetch('data/forecast.json',{cache:'no-store'});if(!r.ok)throw new Error(r.status);F=await r.json()}
+    else{const r=await fetch('https://kf2lmqeuiklzy6ku.public.blob.vercel-storage.com/forecast.json',{cache:'no-store'});if(!r.ok)throw new Error(r.status);F=await r.json()}
     if(!F.days||F.days.length<1)throw new Error('sin días');
     const last=F.days[F.days.length-1];
     if(F.days.length>1&&last.periods?.length<4)F={...F,days:F.days.slice(0,-1)};
