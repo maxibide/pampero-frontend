@@ -4,12 +4,12 @@
  * {
  *   location, model, program, generated (ISO 8601 with timezone),
  *   days: [{
- *     date: 'YYYY-MM-DD', tmax, tmin, pRain,
+ *     date: 'YYYY-MM-DD', tmax, tmin,
  *     precip: { p25, p50, p75 },
  *     periods: [{ temp, wind, gust, dir, pRain, pStorm, pSevere, pSnow, cloud }]
  *   }]
  * }
- * Daily precip quantiles are calculated from ensemble-member daily totals; pRain is the probability of measurable rain during the day.
+ * Daily precip quantiles are calculated from ensemble-member daily totals; daily pRain is the maximum period pRain.
  * tmin is optional and is only shown when all four periods are available.
  * The first day may contain fewer periods; missing periods are assumed to be at the start.
  * An incomplete final day is ignored.
@@ -152,6 +152,7 @@ async function init(){
     if(!F.days||F.days.length<1)throw new Error('sin días');
     const last=F.days[F.days.length-1];
     if(F.days.length>1&&last.periods?.length<4)F={...F,days:F.days.slice(0,-1)};
+    F={...F,days:F.days.map(d=>({...d,pRain:Math.max(...(d.periods||[]).map(p=>p.pRain))}))};
     F.days.forEach((d,i)=>{const L=d.periods?d.periods.length:0;
       const q=d.precip;
       if(!q||![q.p25,q.p50,q.p75,d.pRain].every(Number.isFinite)||q.p25<0||q.p25>q.p50||q.p50>q.p75||d.pRain<0||d.pRain>100)
