@@ -93,8 +93,37 @@ function chart(){
 /* Render a probability row and bar when the probability is nonzero. */
 function prob(l,v,c){if(!v)return '';return `<div class="row"><span>${l}</span><b>${v} %</b></div><div class="bar" style="--c:${c}"><i style="width:${v}%"></i></div>`}
 
+function dayOverview(d,scale){
+  const label=cap(dt(d.date).toLocaleDateString('es-AR',{weekday:'long',day:'numeric',month:'long'}));
+  const rainOn=d.pRain>=25&&d.precip.p75>0;
+  const start=rainOn?Math.min(99,d.precip.p25/scale*100):0;
+  const width=rainOn?Math.min(100-start,Math.max(2,(d.precip.p75-d.precip.p25)/scale*100)):0;
+  const median=rainOn?d.precip.p50/scale*100:0;
+  const rows=d.periods.map((p,j,a,k=j+4-a.length)=>`<div class="overview-row">
+    <div class="overview-time"><b>${PER[k][0]}</b><small>${PER[k][1]}</small></div><b class="overview-temp">${p.temp}°</b>
+    <div class="overview-probs">${[
+      ['Lluvia',p.pRain,'overview-rain'],['Tormenta',p.pStorm,'overview-storm'],
+      ['Tormenta severa',p.pSevere,'overview-severe'],['Nieve',p.pSnow,'overview-snow']
+    ].filter(([,chance])=>chance>0).map(([label,chance,tone])=>`<span><small>${label}</small><b class="${tone}">${chance}%</b></span>`).join('')}</div>
+    <div class="overview-wind"><span class="overview-dir" style="transform:rotate(${(p.dir+180)%360}deg)" aria-hidden="true">↑</span><span>${p.wind} km/h<small>del ${DIR[Math.round(p.dir/22.5)%16]}</small></span></div>
+  </div>`).join('');
+  return `<article class="day-overview"><h3>${label}</h3>
+    <div class="overview-precip"><div class="overview-precip-label"><small>Acumulado</small><b>${rainText(d)}</b></div>
+    <div class="overview-precip-track" aria-hidden="true">${rainOn?`<span class="overview-precip-range" style="left:${start}%;width:${width}%"></span><i style="left:${median}%"></i>`:''}</div></div>
+    <div class="overview-head"><span>Periodo</span><span>Temp.</span><span>Probabilidad</span><span>Viento</span></div>${rows}</article>`;
+}
+
 /* Render the selected day's morning, afternoon, evening, and night details. */
 function detail(){
+  if(N===3){
+    $('detail').classList.add('period-overview');$('detail').style.removeProperty('--n');
+    $('dtitle').hidden=true;
+    const days=F.days.slice(0,3),scale=Math.max(1,...days.filter(d=>d.pRain>=25).map(d=>d.precip.p75));
+    $('detail').innerHTML=days.map(d=>dayOverview(d,scale)).join('');
+    return;
+  }
+  $('dtitle').hidden=false;
+  $('detail').classList.remove('period-overview');
   const P=F.days[sel].periods;$('detail').style.setProperty('--n',P.length);
   $('detail').innerHTML=P.map((p,j,a,k=j+4-a.length)=>`<article class="per"><h3>${PER[k][0]}</h3><small>${PER[k][1]}</small>
   <div class="pt">${p.temp}°</div>
@@ -105,7 +134,12 @@ function detail(){
 }
 
 /* Refresh every forecast section after a selection or range change. */
-function render(){seg();head();chart();detail()}
+function render(){
+  seg();head();
+  const periodsOnly=N===3;$('hero').dataset.view=periodsOnly?'periods':'forecast';
+  if(!periodsOnly)chart();
+  detail();
+}
 $('seg').onclick=e=>{const b=e.target.closest('button');if(!b)return;N=+b.dataset.n;if(sel>=N)sel=0;render()};
 const pick=e=>{const g=e.target.closest('.col');if(g&&(e.type=='click'||e.key=='Enter'||e.key==' ')){e.preventDefault();sel=+g.dataset.i;render()}};
 $('chart').addEventListener('click',pick);$('chart').addEventListener('keydown',pick);
