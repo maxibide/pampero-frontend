@@ -26,9 +26,10 @@ button:focus-visible,.col:focus-visible{outline:2px solid #fff;outline-offset:2p
 .dayl{font-size:1rem;opacity:.9}
 .temps{font:400 clamp(3rem,11vw,5rem)/1 "Instrument Serif",Georgia,serif}
 .temps span{opacity:.6;font-size:.55em;margin-left:10px}
-.chips{display:grid;grid-template-columns:repeat(4,auto);gap:8px 22px;margin:0;padding:0;list-style:none}
+.chips{display:grid;grid-template-columns:repeat(5,auto);gap:8px 22px;margin:0;padding:0;list-style:none}
 .chips li{font-size:1.15rem;font-weight:500}
 .chips small{display:block;font-size:.78rem;font-weight:400;opacity:.8}
+.wind-dir{display:inline-block;color:#b9e1ff;transform-origin:center}
 
 /* Temperature and precipitation chart. */
 .chartwrap{overflow-x:auto;margin:0 -20px;padding:0 20px;-webkit-overflow-scrolling:touch}

@@ -28,6 +28,17 @@ const rainText=d=>{
   const lo=mm(d.precip.p25),hi=mm(d.precip.p75);
   return lo===hi?`${hi} mm`:`${lo}–${hi} mm`;
 };
+function prevailingWind(d){
+  let east=0,north=0,total=0;
+  d.periods.forEach(p=>{
+    const speed=Math.max(0,p.wind),angle=(p.dir+180)*Math.PI/180;
+    east+=Math.sin(angle)*speed;north+=Math.cos(angle)*speed;total+=speed;
+  });
+  const strength=Math.hypot(east,north)/total;
+  if(!total||strength<.25)return{variable:true};
+  const angle=(Math.atan2(east,north)*180/Math.PI+360)%360,from=(angle+180)%360;
+  return{angle,from:DIR[Math.round(from/22.5)%16],variable:false};
+}
 
 /* Return the dominant weather icon and matching hero theme for a day. */
 function icon(d){
@@ -46,14 +57,15 @@ function seg(){
 
 /* Update the selected day's headline conditions. */
 function head(){
-  const d=F.days[sel],[ic,sky]=icon(d);$('hero').dataset.sky=sky;
+  const d=F.days[sel],[ic,sky]=icon(d),wind=prevailingWind(d);$('hero').dataset.sky=sky;
   $('loc').textContent=F.location;const g=new Date(F.generated),gs=isNaN(g)?'':g.toLocaleDateString('es-AR',{day:'numeric',month:'short'}).replace('.','')+', '+g.toLocaleTimeString('es-AR',{hour:'2-digit',minute:'2-digit',hour12:false})+' h';
   $('meta').textContent=`${F.model}${gs?', generado el '+gs:''}${F.program?' por '+F.program:''}`;
   const lab=cap(dt(d.date).toLocaleDateString('es-AR',{weekday:'long',day:'numeric',month:'long'}));
   $('now').innerHTML=`<div class="big"><span class="ico" aria-hidden="true">${ic}</span><div><div class="dayl">${lab}</div>
   <div class="temps">${d.tmax}°${hm(d)?`<span>${d.tmin}°</span>`:''}</div></div></div>
   <ul class="chips"><li>${rainText(d)}<small>Acumulado</small></li><li>${d.pRain} %<small>Prob. de lluvia</small></li>
-  <li>${mx(d,'wind')} km/h<small>Viento máximo</small></li><li>${mx(d,'gust')} km/h<small>Ráfaga máxima</small></li></ul>`;
+  <li>${mx(d,'wind')} km/h<small>Viento máximo</small></li><li>${mx(d,'gust')} km/h<small>Ráfaga máxima</small></li>
+  <li><span class="wind-dir"${wind.variable?'':' style="transform:rotate('+wind.angle+'deg)"'} aria-hidden="true">${wind.variable?'↻':'↑'}</span> ${wind.variable?'Variable':'del '+wind.from}<small>Dirección predominante</small></li></ul>`;
   $('dtitle').textContent=lab;
 }
 
