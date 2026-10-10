@@ -4,10 +4,12 @@
  * {
  *   location, model, program, generated (ISO 8601 with timezone),
  *   days: [{
- *     date: 'YYYY-MM-DD', tmax, tmin, precip,
+ *     date: 'YYYY-MM-DD', tmax, tmin, pRain,
+ *     precip: { p25, p50, p75 },
  *     periods: [{ temp, wind, gust, dir, pRain, pStorm, pSevere, pSnow, cloud }]
  *   }]
  * }
+ * Daily precip quantiles are calculated from ensemble-member daily totals; pRain is the probability of measurable rain during the day.
  * tmin is optional and is only shown when all four periods are available.
  * The first day may contain fewer periods; missing periods are assumed to be at the start.
  * An incomplete final day is ignored.
@@ -20,6 +22,12 @@ const PER=[['Madrugada','00 a 06 h'],['Mañana','06 a 12 h'],['Tarde','12 a 18 h
 const dt=d=>new Date(d+'T12:00:00'),cap=s=>s[0].toUpperCase()+s.slice(1),mx=(d,k)=>Math.max(...d.periods.map(p=>p[k]));
 let N=7,sel=0;
 const hm=d=>d.tmin!=null&&d.periods.length===4; /* A minimum temperature is meaningful only for a complete day. */
+const mm=n=>String(Math.round(n));
+const rainText=d=>{
+  if(d.pRain<25||d.precip.p75===0)return'0 mm';
+  const lo=mm(d.precip.p25),hi=mm(d.precip.p75);
+  return lo===hi?`${hi} mm`:`${lo}–${hi} mm`;
+};
 
 /* Return the dominant weather icon and matching hero theme for a day. */
 function icon(d){
@@ -44,7 +52,7 @@ function head(){
   const lab=cap(dt(d.date).toLocaleDateString('es-AR',{weekday:'long',day:'numeric',month:'long'}));
   $('now').innerHTML=`<div class="big"><span class="ico" aria-hidden="true">${ic}</span><div><div class="dayl">${lab}</div>
   <div class="temps">${d.tmax}°${hm(d)?`<span>${d.tmin}°</span>`:''}</div></div></div>
-  <ul class="chips"><li>${d.precip.toFixed(1)} mm<small>Precipitación</small></li><li>${mx(d,'pRain')} %<small>Prob. de lluvia</small></li>
+  <ul class="chips"><li>${rainText(d)}<small>Acumulado</small></li><li>${d.pRain} %<small>Prob. de lluvia</small></li>
   <li>${mx(d,'wind')} km/h<small>Viento máximo</small></li><li>${mx(d,'gust')} km/h<small>Ráfaga máxima</small></li></ul>`;
   $('dtitle').textContent=lab;
 }
@@ -52,19 +60,20 @@ function head(){
 /* Draw the interactive temperature and precipitation chart. */
 function chart(){
   const D=F.days.slice(0,N),cw=64,W=N*cw,H=260,top=62,bot=108,base=212;
-  const hi=Math.max(...D.map(d=>d.tmax))+2,lo=Math.min(...D.map(d=>hm(d)?d.tmin:d.tmax))-2,mp=Math.max(10,...D.map(d=>d.precip));
+  const hi=Math.max(...D.map(d=>d.tmax))+2,lo=Math.min(...D.map(d=>hm(d)?d.tmin:d.tmax))-2,mp=Math.max(10,...D.map(d=>d.precip.p75));
   const y=t=>top+(hi-t)/(hi-lo)*(H-top-bot),x=i=>i*cw+cw/2;
   const pts=k=>D.map((d,i)=>(k=='tmin'&&!hm(d))?'':x(i)+','+y(d[k])).filter(Boolean).join(' ');
   let s=`<polyline points="${pts('tmax')}" fill="none" stroke="#fff" stroke-width="2.5" stroke-linejoin="round"/>
   <polyline points="${pts('tmin')}" fill="none" stroke="#fff" stroke-opacity=".55" stroke-width="2" stroke-dasharray="1 5" stroke-linecap="round"/>`;
   D.forEach((d,i)=>{
-    const wd=i==0?'Hoy':cap(dt(d.date).toLocaleDateString('es-AR',{weekday:'short'}).replace('.',''))+' '+dt(d.date).getDate(),h=d.precip/mp*34;
+    const wd=i==0?'Hoy':cap(dt(d.date).toLocaleDateString('es-AR',{weekday:'short'}).replace('.',''))+' '+dt(d.date).getDate();
+    const h25=d.precip.p25/mp*34,h50=d.precip.p50/mp*34,h75=d.precip.p75/mp*34,rainOn=d.pRain>=25&&d.precip.p75>0;
     s+=`<g class="col${i==sel?' on':''}" data-i="${i}" tabindex="0" role="button" aria-label="${wd}"><rect x="${i*cw+2}" y="2" width="${cw-4}" height="${H-4}" rx="16"/>
     <text x="${x(i)}" y="36" font-size="22">${icon(d)[0]}</text>
     <circle cx="${x(i)}" cy="${y(d.tmax)}" r="4" fill="#fff"/>${hm(d)?`<circle cx="${x(i)}" cy="${y(d.tmin)}" r="3" fill="#fff" fill-opacity=".7"/>`:''}
     <text class="tx" x="${x(i)}" y="${y(d.tmax)-11}">${d.tmax}°</text>${hm(d)?`<text class="tn" x="${x(i)}" y="${y(d.tmin)+19}">${d.tmin}°</text>`:''}
-    <rect x="${x(i)-9}" y="${base-h}" width="18" height="${Math.max(h,d.precip>0?2:0)}" rx="4" style="fill:rgba(255,255,255,.75)"/>
-    <text class="pn" x="${x(i)}" y="${base+16}">${d.precip>0?d.precip.toFixed(d.precip<10?1:0)+' mm':'0'}</text><text class="dn" x="${x(i)}" y="${H-12}">${wd}</text></g>`;
+    ${rainOn?`<rect x="${x(i)-7}" y="${base-h75}" width="14" height="${Math.max(2,h75-h25)}" rx="4" style="fill:rgba(255,255,255,.55)"/><line x1="${x(i)-10}" y1="${base-h50}" x2="${x(i)+10}" y2="${base-h50}" stroke="#fff" stroke-width="2"/>`:''}
+    <text class="pn" x="${x(i)}" y="${base+16}">${rainText(d)}</text><text class="dn" x="${x(i)}" y="${H-12}">${wd}</text></g>`;
   });
   const c=$('chart');c.setAttribute('viewBox',`0 0 ${W} ${H}`);c.style.minWidth=W+'px';c.innerHTML=s;
 }
@@ -98,6 +107,9 @@ async function init(){
     const last=F.days[F.days.length-1];
     if(F.days.length>1&&last.periods?.length<4)F={...F,days:F.days.slice(0,-1)};
     F.days.forEach((d,i)=>{const L=d.periods?d.periods.length:0;
+      const q=d.precip;
+      if(!q||![q.p25,q.p50,q.p75,d.pRain].every(Number.isFinite)||q.p25<0||q.p25>q.p50||q.p50>q.p75||d.pRain<0||d.pRain>100)
+        throw new Error(`El día ${i+1} (${d.date}) tiene cuantiles o probabilidad diaria inválidos`);
       if(L<1||L>4||(i>0&&L!==4))throw new Error(`El día ${i+1} (${d.date}) tiene ${L} periodos; se esperaban ${i>0?'4':'de 1 a 4'}`)});
     N=Math.min(7,F.days.length);render();
   }catch(e){
