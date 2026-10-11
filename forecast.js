@@ -16,7 +16,9 @@
  * The first day may contain fewer periods; missing periods are assumed to be at the start.
  * An incomplete final day is ignored.
  * The first three days require period.precip for the short-range chart.
- * Each optional period.hours array has six local-hour records; hour is 0-23.
+ * Optional period.hours arrays have six local-hour records, except the first period
+ * of the first day, which may contain only its remaining consecutive hours.
+ * hour is 0-23.
  * Units: degrees Celsius, km/h, wind direction in degrees, mm, and percentages.
  */
 let F;
@@ -209,10 +211,12 @@ async function init(){
         if(i<3&&(!p.precip||![p.precip.p25,p.precip.p50,p.precip.p75].every(Number.isFinite)||p.precip.p25<0||p.precip.p25>p.precip.p50||p.precip.p50>p.precip.p75))
           throw new Error(`El periodo ${j+1} del día ${i+1} tiene acumulados inválidos`);
         if(p.hours===undefined)return;
-        const startHour=(j+4-a.length)*6;
-        if(!Array.isArray(p.hours)||p.hours.length!==6)throw new Error(`El periodo ${j+1} del día ${i+1} debe tener 6 horas`);
+        const startHour=(j+4-a.length)*6,partialFirstPeriod=i===0&&j===0;
+        if(!Array.isArray(p.hours)||p.hours.length<1||p.hours.length>6||(!partialFirstPeriod&&p.hours.length!==6))
+          throw new Error(`El periodo ${j+1} del día ${i+1} debe tener ${partialFirstPeriod?'de 1 a 6':'6'} horas`);
+        const firstHourOffset=partialFirstPeriod?6-p.hours.length:0;
         p.hours.forEach((hour,h)=>{
-          const valid=hour&&hour.hour===startHour+h&&HOUR_FIELDS.every(key=>Number.isFinite(hour[key]));
+          const valid=hour&&hour.hour===startHour+firstHourOffset+h&&HOUR_FIELDS.every(key=>Number.isFinite(hour[key]));
           if(!valid||hour.pRain<0||hour.pRain>100||hour.pStorm<0||hour.pStorm>100||hour.pSevere<0||hour.pSevere>100||hour.pSnow<0||hour.pSnow>100||hour.cloud<0||hour.cloud>100)
             throw new Error(`La hora ${h+1} del periodo ${j+1}, día ${i+1}, es inválida`);
         });
